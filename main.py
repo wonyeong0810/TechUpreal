@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, Depends
+from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 from pymongo import MongoClient
 from typing import List
@@ -6,11 +7,14 @@ from bson import ObjectId
 import os
 from dotenv import load_dotenv
 import openai
-app = FastAPI()
-
+from fastapi.staticfiles import StaticFiles
+app = FastAPI() 
+app.mount("/public", StaticFiles(directory="./public"), name="public")
 load_dotenv()
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
+
+
 
 # MongoDB 설정
 mongo = os.getenv('MONGODB_URI')
@@ -47,6 +51,30 @@ def verify_user(username: str, password: str):
     return False
 
 # 엔드포인트
+@app.get("/", response_class=HTMLResponse)
+def read_root():
+    return FileResponse("./public/index.html") 
+
+@app.get("/signup.html", response_class=HTMLResponse)
+def read_root():
+    return FileResponse("./public/signup.html") 
+
+@app.get("/login.html", response_class=HTMLResponse)
+def read_root():
+    return FileResponse("./public/login.html") 
+
+@app.get("/todolist.html", response_class=HTMLResponse)
+def read_root():
+    return FileResponse("./public/todolist.html") 
+
+@app.get("/variable_generator.html", response_class=HTMLResponse)
+def read_root():
+    return FileResponse("./public/variable_generator.html") 
+
+@app.get("/coding_recommendation.html", response_class=HTMLResponse)
+def read_root():
+    return FileResponse("./public/coding_recommendation.html") 
+
 @app.post("/register")
 def register(user: User):
     if get_user(user.username):
@@ -104,4 +132,4 @@ async def recommend_variable_name(request: VariableDescription):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="127.0.0.1", port=8000)
