@@ -187,25 +187,30 @@
                 return;
             }
 
-            let variableName;
-            switch (caseType) {
-                case 'camelCase':
-                    variableName = role.replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, (match, index) => index === 0 ? match.toLowerCase() : match.toUpperCase()).replace(/\s+/g, '');
-                    break;
-                case 'snakeCase':
-                    variableName = role.replace(/\s+/g, '_').toLowerCase();
-                    break;
-                case 'pascalCase':
-                    variableName = role.replace(/(?:^\w|[A-Z]|\b\w|\s+)/g, (match) => match.toUpperCase()).replace(/\s+/g, '');
-                    break;
-                default:
-                    variableName = role;
-            }
-
-            resultDiv.innerHTML = `
-                <h5>생성된 변수 이름:</h5>
-                <p>${variableName}</p>
-            `;
+            fetch('/recommend', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ description: role, naming_convention: caseType })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.recommendations) {
+                    resultDiv.innerHTML = `
+                        <h5>추천된 변수 이름:</h5>
+                        <ul>
+                            ${data.recommendations.map(name => `<li>${name}</li>`).join('')}
+                        </ul>
+                    `;
+                } else {
+                    resultDiv.innerHTML = '<p>변수 이름 추천 결과가 없습니다.</p>';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `<p>변수 이름 추천 중 오류가 발생했습니다: ${error.message}</p>`;
+            });
         });
     </script>
     

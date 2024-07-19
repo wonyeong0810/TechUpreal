@@ -1,20 +1,29 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel
 from pymongo import MongoClient
 from typing import List
-from bson import ObjectId
 import os
 from dotenv import load_dotenv
 import openai
 from fastapi.staticfiles import StaticFiles
-app = FastAPI() 
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+# CORS 설정
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 필요한 경우 특정 도메인으로 제한할 수 있습니다.
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.mount("/public", StaticFiles(directory="./public"), name="public")
 load_dotenv()
 
 openai.api_key = os.getenv('OPENAI_API_KEY')
-
-
 
 # MongoDB 설정
 mongo = os.getenv('MONGODB_URI')
@@ -32,10 +41,12 @@ class ToDoItem(BaseModel):
     title: str
     description: str = ""
     completed: bool = False
+    due_date: str  # 날짜를 문자열로 저장 (형식: YYYY-MM-DD)
+    due_time: str  # 시간을 문자열로 저장 (형식: HH:MM)
 
 class ToDoItemInDB(ToDoItem):
     username: str
-    
+
 class VariableDescription(BaseModel):
     description: str
     naming_convention: str
@@ -47,33 +58,33 @@ def get_user(username: str):
 def verify_user(username: str, password: str):
     user = get_user(username)
     if user and user["password"] == password:
-        return True
-    return False
+        return user
+    return None
 
 # 엔드포인트
 @app.get("/", response_class=HTMLResponse)
 def read_root():
-    return FileResponse("./public/index.html") 
+    return FileResponse("./public/index.html")
 
 @app.get("/signup.html", response_class=HTMLResponse)
-def read_root():
-    return FileResponse("./public/signup.html") 
+def read_signup():
+    return FileResponse("./public/signup.html")
 
 @app.get("/login.html", response_class=HTMLResponse)
-def read_root():
-    return FileResponse("./public/login.html") 
+def read_login():
+    return FileResponse("./public/login.html")
 
 @app.get("/todolist.html", response_class=HTMLResponse)
-def read_root():
-    return FileResponse("./public/todolist.html") 
+def read_todolist():
+    return FileResponse("./public/todolist.html")
 
 @app.get("/variable_generator.html", response_class=HTMLResponse)
-def read_root():
-    return FileResponse("./public/variable_generator.html") 
+def read_variable_generator():
+    return FileResponse("./public/variable_generator.html")
 
 @app.get("/coding_recommendation.html", response_class=HTMLResponse)
-def read_root():
-    return FileResponse("./public/coding_recommendation.html") 
+def read_coding_recommendation():
+    return FileResponse("./public/coding_recommendation.html")
 
 @app.post("/register")
 def register(user: User):
@@ -84,16 +95,16 @@ def register(user: User):
 
 @app.post("/login")
 def login(user: User):
-    if not verify_user(user.username, user.password):
+    verified_user = verify_user(user.username, user.password)
+    if not verified_user:
         raise HTTPException(status_code=400, detail="Invalid username or password")
     return {"message": "Login successful"}
 
 @app.post("/todos/", response_model=ToDoItem)
-def create_todo_item(todo: ToDoItem, username: str):
-    if not get_user(username):
+def create_todo_item(todo: ToDoItemInDB):
+    if not get_user(todo.username):
         raise HTTPException(status_code=400, detail="User not found")
-    todo_in_db = ToDoItemInDB(**todo.dict(), username=username)
-    todos_collection.insert_one(todo_in_db.dict())
+    todos_collection.insert_one(todo.dict())
     return todo
 
 @app.get("/todos/", response_model=List[ToDoItem])
@@ -119,16 +130,15 @@ async def recommend_variable_name(request: VariableDescription):
         {"role": "user", "content": f"다음 기능이나 설명에 맞는 변수 이름을 {request.naming_convention} 규칙으로 5개 추천해 주세요: {request.description}"}
     ]
     
-    response = openai.chat.completions.create(
+    response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=prompt,
         max_tokens=300,
         temperature=0.7,
     )
     
-    response_message = response.choices[0].message.content
+    response_message = response.choices[0].message['content']
     return {"recommendations": response_message.split("\n")}
-
 
 if __name__ == "__main__":
     import uvicorn
